@@ -1,0 +1,1206 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Boutique Manager Pro</title>
+<link rel="stylesheet" href="style.css">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+</head>
+<body data-theme="rose-gold">
+
+<!-- LOGIN SCREEN -->
+<div id="loginScreen" class="login-screen">
+  <div class="login-card">
+    <div class="login-logo">
+      <div class="logo-icon">✦</div>
+      <h1>Boutique Manager</h1>
+      <p>Gestion professionnelle de votre boutique</p>
+    </div>
+
+    <!-- Mode selector -->
+    <div class="login-mode-tabs">
+      <button class="lmt-tab active" id="tab-local" onclick="LoginMode.setLocal()">💻 Local</button>
+      <button class="lmt-tab"        id="tab-cloud" onclick="LoginMode.setCloud()">☁ Cloud (Google)</button>
+    </div>
+
+    <!-- LOCAL MODE -->
+    <div id="login-local-panel" class="login-panel active">
+      <div class="form-group">
+        <label>Identifiant</label>
+        <input type="text" id="loginUser" placeholder="admin" value="admin">
+      </div>
+      <div class="form-group">
+        <label>Mot de passe</label>
+        <input type="password" id="loginPass" placeholder="••••••••" value="1234">
+      </div>
+      <button class="btn-primary w-full" onclick="App.login()">Se connecter</button>
+      <p class="login-hint">Mode local · données sur cet appareil uniquement</p>
+    </div>
+
+    <!-- CLOUD MODE -->
+    <div id="login-cloud-panel" class="login-panel">
+      <div id="firebase-not-configured" class="fbk-notice">
+        <div class="fbk-notice-icon">☁</div>
+        <p>Pour synchroniser vos données entre plusieurs appareils, connectez un projet Firebase gratuit.</p>
+        <button class="btn-primary w-full" onclick="LoginMode.showFirebaseSetup()">Configurer Firebase</button>
+        <p class="login-hint">Gratuit · Google Firestore · synchronisation instantanée</p>
+      </div>
+
+      <div id="firebase-configured" style="display:none">
+        <div class="fbk-connected-badge" id="fbk-project-name">☁ Firebase configuré</div>
+
+        <button class="btn-google-signin" onclick="Cloud.signInGoogle()">
+          <svg width="20" height="20" viewBox="0 0 24 24" style="flex-shrink:0"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+          Se connecter avec Google
+        </button>
+
+        <div class="fbk-or"><span>ou par email</span></div>
+        <div class="form-group">
+          <label>Email</label>
+          <input type="email" id="fbk-email" placeholder="votre@email.com" autocomplete="email">
+        </div>
+        <div class="form-group">
+          <label>Mot de passe</label>
+          <input type="password" id="fbk-pass" placeholder="••••••••" autocomplete="current-password"
+            onkeydown="if(event.key==='Enter') Cloud.signInEmail()">
+        </div>
+        <div style="display:flex;gap:0.5rem">
+          <button class="btn-primary" style="flex:1" onclick="Cloud.signInEmail()">Se connecter</button>
+          <button class="btn-secondary" style="flex:1" onclick="Cloud.signUpEmail()">Créer compte</button>
+        </div>
+        <button class="fbk-reset-btn" onclick="LoginMode.resetFirebase()">⚙ Changer de projet Firebase</button>
+        <p class="login-hint" style="margin-top:0.5rem">✓ Sync temps réel entre toutes vos boutiques</p>
+      </div>
+    </div>
+
+    <!-- Status -->
+    <div id="login-status" style="text-align:center;font-size:0.8rem;color:var(--text2);margin-top:0.5rem;min-height:1.2em"></div>
+  </div>
+</div>
+
+<!-- FIREBASE SETUP MODAL -->
+<div id="firebaseSetupModal" class="fbk-setup-overlay" style="display:none">
+  <div class="fbk-setup-card">
+    <button class="fbk-setup-close" onclick="LoginMode.hideFirebaseSetup()">✕</button>
+    <h2 class="fbk-setup-title">⚡ Connecter Firebase</h2>
+    <p class="fbk-setup-sub">Suivez ces 5 étapes — gratuit, 5 minutes, synchronisation instantanée entre toutes vos boutiques</p>
+
+    <div class="fbk-steps">
+      <div class="fbk-step">
+        <div class="fbk-step-n">1</div>
+        <div>Allez sur <a href="https://console.firebase.google.com" target="_blank" style="color:var(--accent);font-weight:600">console.firebase.google.com</a> avec votre compte Google → <strong>Créer un projet</strong> → donnez un nom (ex : <em>ma-boutique-dakar</em>) → désactiver Google Analytics → <strong>Créer</strong></div>
+      </div>
+      <div class="fbk-step">
+        <div class="fbk-step-n">2</div>
+        <div>Dans le menu gauche → <strong>Build → Firestore Database</strong> → <strong>Créer une base de données</strong> → choisir <em>Mode production</em> → sélectionner <em>eur3 (Europe)</em> ou <em>nam5</em> → <strong>Activer</strong></div>
+      </div>
+      <div class="fbk-step fbk-step-warn">
+        <div class="fbk-step-n">!</div>
+        <div><strong>Règles de sécurité Firestore</strong> — Dans Firestore → onglet <strong>Règles</strong> → remplacer tout par :<br>
+          <code class="fbk-rule-code">rules_version = '2';<br>service cloud.firestore {<br>&nbsp;&nbsp;match /databases/{db}/documents {<br>&nbsp;&nbsp;&nbsp;&nbsp;match /users/{uid}/{document=**} {<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;allow read, write: if request.auth != null &amp;&amp; request.auth.uid == uid;<br>&nbsp;&nbsp;&nbsp;&nbsp;}<br>&nbsp;&nbsp;}<br>}</code>
+          → <strong>Publier</strong></div>
+      </div>
+      <div class="fbk-step">
+        <div class="fbk-step-n">3</div>
+        <div>Menu gauche → <strong>Build → Authentication</strong> → <strong>Commencer</strong> → onglet <strong>Sign-in method</strong> → activer <strong>Google</strong> (+ votre email support) → activer <strong>E-mail/Mot de passe</strong> → Enregistrer</div>
+      </div>
+      <div class="fbk-step">
+        <div class="fbk-step-n">4</div>
+        <div>⚙ Icône engrenage → <strong>Paramètres du projet</strong> → section <strong>Vos applications</strong> → cliquer <strong>&lt;/&gt;</strong> (Web) → donner un nom → <strong>Enregistrer l'application</strong> → copier tout le bloc <code>firebaseConfig = { ... }</code></div>
+      </div>
+      <div class="fbk-step">
+        <div class="fbk-step-n">5</div>
+        <div>Collez la configuration dans le champ ci-dessous et cliquez <strong>Enregistrer</strong></div>
+      </div>
+    </div>
+
+    <div class="form-group" style="margin-top:1rem">
+      <label>Collez votre configuration Firebase ici</label>
+      <textarea id="fbk-config-input" rows="7" placeholder='const firebaseConfig = {
+  apiKey: "AIzaSy...",
+  authDomain: "votre-projet.firebaseapp.com",
+  projectId: "votre-projet",
+  storageBucket: "votre-projet.appspot.com",
+  messagingSenderId: "123456789012",
+  appId: "1:123456789012:web:abcdef123456"
+};'></textarea>
+    </div>
+    <button class="btn-primary w-full" onclick="LoginMode.saveFirebaseConfig()" style="font-size:1rem;padding:0.9rem">
+      ✓ Enregistrer et activer la synchronisation
+    </button>
+    <div id="fbk-setup-error" style="color:var(--danger);font-size:0.82rem;margin-top:0.75rem;text-align:center;min-height:1.2em"></div>
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<div id="mainApp" class="app-container hidden">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-brand">
+      <div class="brand-icon">✦</div>
+      <div class="brand-text">
+        <span class="brand-name" id="brandName">Ma Boutique</span>
+        <span class="brand-sub">Manager Pro</span>
+      </div>
+      <div id="cloud-sync-indicator" class="cloud-sync-dot" title="Synchronisation cloud" style="display:none"></div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <a href="#" class="nav-item active" data-page="dashboard">
+        <span class="nav-icon">◈</span><span>Tableau de bord</span>
+      </a>
+      <a href="#" class="nav-item" data-page="products">
+        <span class="nav-icon">◈</span><span>Produits & Stock</span>
+      </a>
+      <a href="#" class="nav-item" data-page="sales">
+        <span class="nav-icon">◈</span><span>Ventes</span>
+      </a>
+      <a href="#" class="nav-item" data-page="credits">
+        <span class="nav-icon">◈</span><span>Crédits</span>
+        <span class="nav-badge-count" id="nav-credits-badge" style="display:none">0</span>
+      </a>
+      <a href="#" class="nav-item" data-page="expenses">
+        <span class="nav-icon">◈</span><span>Dépenses</span>
+      </a>
+      <a href="#" class="nav-item" data-page="invoices">
+        <span class="nav-icon">◈</span><span>Factures</span>
+      </a>
+      <a href="#" class="nav-item" data-page="settings">
+        <span class="nav-icon">◈</span><span>Paramètres</span>
+      </a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="user-info">
+        <div class="user-avatar" id="userAvatar">A</div>
+        <div style="flex:1;min-width:0">
+          <div class="user-name" id="userName">Admin</div>
+          <div class="user-role" id="userRole">Administrateur</div>
+        </div>
+      </div>
+      <button class="btn-logout" onclick="App.logout()" id="btn-local-logout">⎋ Quitter</button>
+      <button class="btn-logout" onclick="Cloud.signOut()" id="btn-cloud-logout" style="display:none">☁ Déconnecter</button>
+    </div>
+  </aside>
+
+  <!-- MAIN CONTENT -->
+  <main class="main-content">
+    <!-- TOP BAR -->
+    <header class="topbar">
+      <button class="menu-toggle" onclick="App.toggleSidebar()">☰</button>
+      <div class="topbar-search">
+        <input type="text" placeholder="Recherche rapide..." id="globalSearch" oninput="App.globalSearch(this.value)">
+        <span class="search-icon">⌕</span>
+        <div class="search-results" id="searchResults"></div>
+      </div>
+      <div class="topbar-actions">
+        <div class="stock-alert-badge" id="stockAlertBadge" onclick="App.showPage('products')" style="display:none">
+          ⚠ <span id="stockAlertCount">0</span> alertes stock
+        </div>
+
+        <!-- BOUTON SYNCHRONISATION CLOUD -->
+        <button id="sync-btn" class="sync-topbar-btn" onclick="Cloud.manualSync()" title="Synchroniser maintenant" style="display:none">
+          <span class="sync-btn-icon" id="sync-btn-icon">↻</span>
+          <span class="sync-btn-label" id="sync-btn-label">Sync</span>
+        </button>
+
+        <div class="theme-switcher">
+          <button onclick="App.setTheme('rose-gold')" class="theme-btn" style="background:#c8a4a5" title="Rose Gold"></button>
+          <button onclick="App.setTheme('dark-luxury')" class="theme-btn" style="background:#1a1a2e" title="Luxe Sombre"></button>
+          <button onclick="App.setTheme('black-gold')" class="theme-btn" style="background:#0d0d0d" title="Noir & Or"></button>
+          <button onclick="App.setTheme('light')" class="theme-btn" style="background:#f8f4f0" title="Clair"></button>
+        </div>
+        <div class="clock" id="clock"></div>
+        <div id="auto-save-indicator" style="font-size:0.72rem;color:var(--text2);white-space:nowrap"></div>
+      </div>
+    </header>
+
+    <!-- PAGES -->
+    <div class="page-container">
+
+      <!-- DASHBOARD -->
+      <div id="page-dashboard" class="page active">
+        <div class="page-header">
+          <h2>Tableau de Bord</h2>
+          <div class="date-filter">
+            <button class="filter-btn active" data-period="day"      onclick="Dashboard.setPeriod('day',this)">Jour</button>
+            <button class="filter-btn"        data-period="week"     onclick="Dashboard.setPeriod('week',this)">Semaine</button>
+            <button class="filter-btn"        data-period="month"    onclick="Dashboard.setPeriod('month',this)">Mois</button>
+            <button class="filter-btn"        data-period="quarter"  onclick="Dashboard.setPeriod('quarter',this)">Trimestre</button>
+            <button class="filter-btn"        data-period="semester" onclick="Dashboard.setPeriod('semester',this)">Semestre</button>
+            <button class="filter-btn"        data-period="year"     onclick="Dashboard.setPeriod('year',this)">Année</button>
+          </div>
+        </div>
+
+        <div class="kpi-grid">
+          <div class="kpi-card" id="kpi-sales">
+            <div class="kpi-icon">💰</div>
+            <div class="kpi-data">
+              <div class="kpi-label">Ventes</div>
+              <div class="kpi-value" id="kpi-sales-val">0 FCFA</div>
+            </div>
+          </div>
+          <div class="kpi-card" id="kpi-profit">
+            <div class="kpi-icon">📈</div>
+            <div class="kpi-data">
+              <div class="kpi-label">Bénéfice net</div>
+              <div class="kpi-value" id="kpi-profit-val">0 FCFA</div>
+            </div>
+          </div>
+          <div class="kpi-card" id="kpi-expenses">
+            <div class="kpi-icon">📉</div>
+            <div class="kpi-data">
+              <div class="kpi-label">Dépenses</div>
+              <div class="kpi-value" id="kpi-expenses-val">0 FCFA</div>
+            </div>
+          </div>
+          <div class="kpi-card" id="kpi-orders">
+            <div class="kpi-icon">🛍</div>
+            <div class="kpi-data">
+              <div class="kpi-label">Transactions</div>
+              <div class="kpi-value" id="kpi-orders-val">0</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="charts-grid">
+          <div class="chart-card wide">
+            <div class="chart-header">
+              <h3>Évolution des ventes</h3>
+            </div>
+            <canvas id="salesChart" height="120"></canvas>
+          </div>
+          <div class="chart-card">
+            <div class="chart-header"><h3>Répartition</h3></div>
+            <canvas id="categoryChart" height="200"></canvas>
+          </div>
+        </div>
+
+
+        <!-- WEEK DAYS TABLE — visible only in week mode -->
+        <div id="week-days-table" style="display:none" class="section-card week-days-section">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+            <h3 id="days-table-title" style="margin:0">Détail des ventes — semaine en cours</h3>
+          </div>
+          <table class="data-table wdt-table">
+            <thead>
+              <tr>
+                <th>Jour</th>
+                <th>Transactions</th>
+                <th>Montant vendu</th>
+                <th>Bénéfice</th>
+              </tr>
+            </thead>
+            <tbody id="week-days-tbody"></tbody>
+            <tfoot id="week-days-tfoot"></tfoot>
+          </table>
+        </div>
+
+        <div class="dash-bottom">
+          <div class="top-products-card">
+            <h3>Top produits</h3>
+            <div id="topProducts"></div>
+          </div>
+          <div class="recent-sales-card">
+            <h3>Ventes récentes</h3>
+            <div id="recentSales"></div>
+          </div>
+          <div class="alerts-card">
+            <h3>Alertes stock</h3>
+            <div id="stockAlerts"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PRODUCTS -->
+      <div id="page-products" class="page">
+        <div class="page-header">
+          <h2>Produits & Stock</h2>
+          <button class="btn-primary" onclick="Products.openModal()">+ Ajouter un produit</button>
+        </div>
+
+        <!-- ═══ VALEUR TOTALE DU STOCK ═══ -->
+        <div class="stock-value-banner">
+          <div class="stock-value-main">
+            <div class="stock-value-label">Valeur totale du stock (coût d'achat)</div>
+            <div class="stock-value-amount" id="stock-val-cost">0 FCFA</div>
+          </div>
+          <div class="stock-value-cards">
+            <div class="stock-val-card">
+              <div class="svc-label">Valeur vente détail</div>
+              <div class="svc-val" id="stock-val-detail">0 FCFA</div>
+            </div>
+            <div class="stock-val-card">
+              <div class="svc-label">Valeur vente gros</div>
+              <div class="svc-val" id="stock-val-gros">0 FCFA</div>
+            </div>
+            <div class="stock-val-card svc-green">
+              <div class="svc-label">Bénéfice potentiel</div>
+              <div class="svc-val" id="stock-val-profit">0 FCFA</div>
+            </div>
+            <div class="stock-val-card">
+              <div class="svc-label">Références</div>
+              <div class="svc-val" id="stock-val-refs">0</div>
+            </div>
+            <div class="stock-val-card svc-danger">
+              <div class="svc-label">En rupture</div>
+              <div class="svc-val" id="stock-val-rupture">0</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="toolbar">
+          <input type="text" placeholder="Rechercher un produit..." id="productSearch" oninput="Products.filter()">
+          <select id="categoryFilter" onchange="Products.filter()">
+            <option value="">Toutes catégories</option>
+          </select>
+          <select id="stockFilter" onchange="Products.filter()">
+            <option value="">Tout le stock</option>
+            <option value="low">Stock faible</option>
+            <option value="ok">Stock OK</option>
+            <option value="out">Rupture</option>
+          </select>
+          <button class="btn-secondary" onclick="Products.exportExcel()">📊 Excel</button>
+        </div>
+
+        <div class="table-wrapper">
+          <table class="data-table" id="productsTable">
+            <thead>
+              <tr>
+                <th>Produit</th>
+                <th>Catégorie</th>
+                <th>Prix détail</th>
+                <th>Prix gros</th>
+                <th>Coût</th>
+                <th>Stock</th>
+                <th>Statut</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="productsTbody"></tbody>
+          </table>
+        </div>
+
+        <!-- Stock History -->
+        <div class="section-card mt-2">
+          <h3>Historique des mouvements de stock</h3>
+          <div class="table-wrapper">
+            <table class="data-table">
+              <thead>
+                <tr><th>Date</th><th>Produit</th><th>Type</th><th>Quantité</th><th>Note</th></tr>
+              </thead>
+              <tbody id="stockHistoryTbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- SALES -->
+      <div id="page-sales" class="page">
+        <div class="page-header">
+          <h2>Gestion des Ventes</h2>
+          <div style="display:flex;gap:0.5rem;align-items:center">
+            <button class="btn-secondary" onclick="Sales.openTrash()" style="font-size:0.85rem">🗑️ Corbeille</button>
+            <button class="btn-primary" onclick="Sales.openModal()">+ Nouvelle vente</button>
+          </div>
+        </div>
+
+        <div class="toolbar">
+          <input type="date" id="salesDateFrom">
+          <input type="date" id="salesDateTo">
+          <select id="salesTypeFilter">
+            <option value="">Tous types</option>
+            <option value="detail">Détail</option>
+            <option value="gros">Gros</option>
+          </select>
+          <button class="btn-secondary" onclick="Sales.filter()">Filtrer</button>
+          <button class="btn-secondary" onclick="Sales.exportExcel()">📊 Excel</button>
+        </div>
+
+        <div class="kpi-grid compact">
+          <div class="kpi-card small">
+            <div class="kpi-label">Total période</div>
+            <div class="kpi-value" id="sales-total-period">0 FCFA</div>
+          </div>
+          <div class="kpi-card small">
+            <div class="kpi-label">Ventes détail</div>
+            <div class="kpi-value" id="sales-detail">0 FCFA</div>
+          </div>
+          <div class="kpi-card small">
+            <div class="kpi-label">Ventes gros</div>
+            <div class="kpi-value" id="sales-gros">0 FCFA</div>
+          </div>
+          <div class="kpi-card small">
+            <div class="kpi-label">Bénéfice</div>
+            <div class="kpi-value" id="sales-benefit">0 FCFA</div>
+          </div>
+        </div>
+
+        <div class="table-wrapper">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Client</th>
+                <th>Produits</th>
+                <th>Type</th>
+                <th>Total</th>
+                <th>Remise</th>
+                <th>Paiement</th>
+                <th>Bénéfice</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="salesTbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+
+      <!-- CREDITS -->
+      <div id="page-credits" class="page">
+        <div class="page-header">
+          <h2>Ventes à Crédit</h2>
+          <div style="display:flex;gap:0.5rem">
+            <button class="btn-secondary" onclick="Credits.exportExcel()">📊 Excel</button>
+            <button class="btn-primary" onclick="Credits.openModal()">+ Nouvelle vente à crédit</button>
+          </div>
+        </div>
+
+        <div class="kpi-grid compact" style="margin-bottom:1.25rem">
+          <div class="kpi-card small">
+            <div class="kpi-label">Clients débiteurs</div>
+            <div class="kpi-value" id="cr-stat-clients" style="color:var(--danger)">0</div>
+          </div>
+          <div class="kpi-card small">
+            <div class="kpi-label">Total accordé</div>
+            <div class="kpi-value" id="cr-stat-total">0 FCFA</div>
+          </div>
+          <div class="kpi-card small">
+            <div class="kpi-label">Reçu</div>
+            <div class="kpi-value" id="cr-stat-received" style="color:#4caf50">0 FCFA</div>
+          </div>
+          <div class="kpi-card small">
+            <div class="kpi-label">Reste à récupérer</div>
+            <div class="kpi-value" id="cr-stat-left" style="color:var(--danger)">0 FCFA</div>
+          </div>
+        </div>
+
+        <div class="credit-info-banner">
+          ⚠ Les ventes à crédit <strong>ne sont pas comptabilisées dans vos bénéfices</strong> tant que le client n'a pas soldé sa dette. Enregistrez les versements reçus pour mettre à jour votre situation.
+        </div>
+
+        <div class="table-wrapper">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Client</th>
+                <th>Articles</th>
+                <th>Total dû</th>
+                <th>Reçu</th>
+                <th>Reste</th>
+                <th>Progression</th>
+                <th>Statut</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="creditsTbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- EXPENSES -->
+      <div id="page-expenses" class="page">
+        <div class="page-header">
+          <h2>Gestion des Dépenses</h2>
+          <button class="btn-primary" onclick="Expenses.openModal()">+ Ajouter dépense</button>
+        </div>
+
+        <div class="toolbar">
+          <input type="date" id="expDateFrom">
+          <input type="date" id="expDateTo">
+          <select id="expCatFilter" onchange="Expenses.filter()">
+            <option value="">Toutes catégories</option>
+            <option value="Loyer">Loyer</option>
+            <option value="Stock">Approvisionnement stock</option>
+            <option value="Transport">Transport</option>
+            <option value="Personnel">Personnel</option>
+            <option value="Autres">Autres</option>
+          </select>
+          <button class="btn-secondary" onclick="Expenses.filter()">Filtrer</button>
+        </div>
+
+        <div class="kpi-grid compact">
+          <div class="kpi-card small">
+            <div class="kpi-label">Total dépenses</div>
+            <div class="kpi-value" id="exp-total">0 FCFA</div>
+          </div>
+          <div class="kpi-card small">
+            <div class="kpi-label">Ce mois</div>
+            <div class="kpi-value" id="exp-month">0 FCFA</div>
+          </div>
+        </div>
+
+        <div class="table-wrapper">
+          <table class="data-table">
+            <thead>
+              <tr><th>Date</th><th>Description</th><th>Catégorie</th><th>Montant</th><th>Actions</th></tr>
+            </thead>
+            <tbody id="expensesTbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- INVOICES -->
+      <div id="page-invoices" class="page">
+        <div class="page-header">
+          <h2>Gestion des Factures</h2>
+          <button class="btn-primary" onclick="Invoices.openModal(null)">+ Nouvelle facture</button>
+        </div>
+
+        <!-- Stats factures -->
+        <div class="kpi-grid compact" style="margin-bottom:1.25rem">
+          <div class="kpi-card small">
+            <div class="kpi-label">Total factures</div>
+            <div class="kpi-value" id="inv-stat-count">0</div>
+          </div>
+          <div class="kpi-card small">
+            <div class="kpi-label">Montant total</div>
+            <div class="kpi-value" id="inv-stat-total">0 FCFA</div>
+          </div>
+          <div class="kpi-card small">
+            <div class="kpi-label">Ce mois</div>
+            <div class="kpi-value" id="inv-stat-month">0 FCFA</div>
+          </div>
+        </div>
+
+        <!-- Filtres -->
+        <div class="toolbar" style="margin-bottom:1rem">
+          <input type="text" placeholder="Rechercher client, numero..." id="inv-search" oninput="Invoices.filterTable()">
+          <input type="date" id="inv-filter-from">
+          <input type="date" id="inv-filter-to">
+          <button class="btn-secondary" onclick="Invoices.filterTable()">Filtrer</button>
+          <button class="btn-secondary" onclick="Invoices.exportExcel()">Export Excel</button>
+        </div>
+
+        <!-- Table -->
+        <div class="table-wrapper">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>N° Facture</th>
+                <th>Date</th>
+                <th>Client</th>
+                <th>Articles</th>
+                <th>Total HT</th>
+                <th>Remise</th>
+                <th>TVA</th>
+                <th>Total TTC</th>
+                <th>Paiement</th>
+                <th>Statut</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="invoicesTbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- SETTINGS -->
+      <div id="page-settings" class="page">
+        <div class="page-header"><h2>Paramètres</h2></div>
+        <div class="settings-grid">
+          <div class="settings-card">
+            <h3>Informations boutique</h3>
+            <div class="form-group"><label>Nom de la boutique</label>
+              <input type="text" id="set-shopname" value="Ma Boutique"></div>
+            <div class="form-group"><label>Adresse</label>
+              <input type="text" id="set-address" value="Dakar, Sénégal"></div>
+            <div class="form-group"><label>Téléphone</label>
+              <input type="text" id="set-phone" value="+221 XX XXX XX XX"></div>
+            <div class="form-group"><label>Email</label>
+              <input type="text" id="set-email" value="boutique@email.com"></div>
+            <div class="form-group"><label>Site web</label>
+              <input type="text" id="set-website" placeholder="www.maboutique.com"></div>
+            <div class="form-group"><label>NINEA / Registre Commerce</label>
+              <input type="text" id="set-ninea" placeholder="NINEA 00000000"></div>
+            <div class="form-group">
+              <label>Logo de la boutique</label>
+              <div class="logo-upload-area" id="logoUploadArea" onclick="document.getElementById('set-logo-file').click()">
+                <img id="logoPreview" src="" alt="" style="display:none;max-height:70px;max-width:180px;border-radius:6px;">
+                <div id="logoPlaceholder">
+                  <div style="font-size:2rem">🖼️</div>
+                  <div style="font-size:0.8rem;color:var(--text2)">Cliquez pour uploader votre logo</div>
+                  <div style="font-size:0.75rem;color:var(--text2)">PNG, JPG — max 2MB</div>
+                </div>
+              </div>
+              <input type="file" id="set-logo-file" accept="image/*" style="display:none" onchange="Settings.handleLogoUpload(this)">
+              <button class="btn-secondary" style="margin-top:0.5rem;font-size:0.8rem" onclick="Settings.removeLogo()">✕ Supprimer le logo</button>
+            </div>
+            <div class="form-group"><label>Seuil alerte stock faible</label>
+              <input type="number" id="set-stock-threshold" value="5"></div>
+            <button class="btn-primary" onclick="Settings.save()">Sauvegarder</button>
+          </div>
+          <div class="settings-card">
+            <h3>Sécurité & Utilisateurs</h3>
+            <div class="form-group"><label>Rôle actuel</label>
+              <select id="set-role">
+                <option value="admin">Administrateur</option>
+                <option value="vendor">Vendeur</option>
+              </select>
+            </div>
+            <div class="form-group"><label>Changer mot de passe admin</label>
+              <div style="display:flex;gap:0.5rem">
+                <input type="password" id="set-pass" placeholder="Nouveau mot de passe" style="flex:1">
+                <button class="btn-secondary" onclick="Settings.changePass()">Changer</button>
+              </div>
+            </div>
+            <div class="form-group" style="margin-top:1rem">
+              <label>Mot de passe de suppression de vente
+                <span style="font-weight:400;color:var(--text2);font-size:0.8rem"> — demandé lors de la suppression d'une vente</span>
+              </label>
+              <div style="display:flex;gap:0.5rem">
+                <input type="password" id="set-del-pass" placeholder="Nouveau mot de passe suppression" style="flex:1">
+                <button class="btn-secondary" onclick="Settings.changeDeletePass()">Changer</button>
+              </div>
+              <p style="margin:0.4rem 0 0;font-size:0.78rem;color:var(--text2)">Mot de passe actuel par défaut : <code>del123</code></p>
+            </div>
+          </div>
+          <div class="settings-card">
+            <h3>Thème & Apparence</h3>
+            <div class="theme-gallery">
+              <div class="theme-option" onclick="App.setTheme('rose-gold')" style="--t:#c8a4a5">
+                <div class="theme-preview rg"></div><span>Rose Gold</span>
+              </div>
+              <div class="theme-option" onclick="App.setTheme('dark-luxury')" style="--t:#7b5ea7">
+                <div class="theme-preview dl"></div><span>Luxe Sombre</span>
+              </div>
+              <div class="theme-option" onclick="App.setTheme('black-gold')" style="--t:#d4af37">
+                <div class="theme-preview bg"></div><span>Noir & Or</span>
+              </div>
+              <div class="theme-option" onclick="App.setTheme('light')" style="--t:#e8d5c4">
+                <div class="theme-preview lt"></div><span>Clair Élégant</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="settings-card settings-card-full">
+            <h3>💾 Sauvegarde & Restauration</h3>
+            <div id="abk-panel"></div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- end page-container -->
+  </main>
+</div><!-- end mainApp -->
+
+<!-- MODALS -->
+<div id="modalOverlay" class="modal-overlay">
+
+  <!-- Product Modal -->
+  <div id="productModal" class="modal hidden">
+    <div class="modal-header">
+      <h3 id="productModalTitle">Nouveau Produit</h3>
+      <button onclick="App.forceCloseModal()" class="modal-close">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="prod-id">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Nom du produit *</label>
+          <input type="text" id="prod-name" placeholder="Ex: Lingerie ensemble" required>
+        </div>
+        <div class="form-group">
+          <label>Catégorie *</label>
+          <input type="text" id="prod-category" list="categorySuggestions" placeholder="Ex: Lingerie">
+          <datalist id="categorySuggestions">
+            <option value="Lingerie"><option value="Gaine"><option value="Peignoir">
+            <option value="Serviette"><option value="Drap"><option value="Cuissard">
+            <option value="Parfum"><option value="Mousse massage"><option value="Ensemble">
+            <option value="Caleçon"><option value="Tee-shirt"><option value="Sous-vêtements">
+            <option value="Chaussure"><option value="Sac"><option value="Nuisette/Pyjama">
+          </datalist>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Prix vente détail (FCFA)</label>
+          <input type="number" id="prod-price-detail" placeholder="0">
+        </div>
+        <div class="form-group">
+          <label>Prix vente gros (FCFA)</label>
+          <input type="number" id="prod-price-gros" placeholder="0">
+        </div>
+        <div class="form-group">
+          <label>Coût d'achat (FCFA)</label>
+          <input type="number" id="prod-cost" placeholder="0">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Quantité en stock</label>
+          <input type="number" id="prod-stock" placeholder="0">
+        </div>
+        <div class="form-group">
+          <label>Seuil alerte (min)</label>
+          <input type="number" id="prod-alert" placeholder="5">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Description / Notes</label>
+        <textarea id="prod-notes" rows="2" placeholder="Notes..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="App.forceCloseModal()">Annuler</button>
+      <button class="btn-primary" onclick="Products.save()">Enregistrer</button>
+    </div>
+  </div>
+
+  <!-- Sale Modal -->
+  <div id="saleModal" class="modal hidden">
+    <div class="modal-header">
+      <h3>Nouvelle Vente</h3>
+      <button onclick="App.forceCloseModal()" class="modal-close">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="sale-id">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Date *</label>
+          <input type="date" id="sale-date">
+        </div>
+        <div class="form-group">
+          <label>Type de vente *</label>
+          <select id="sale-type" onchange="Sales.updatePrices()">
+            <option value="detail">Détail</option>
+            <option value="gros">Gros</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Client</label>
+          <input type="text" id="sale-client" placeholder="Nom client (optionnel)" list="clientNames">
+          <datalist id="clientNames"></datalist>
+        </div>
+      </div>
+
+      <div class="sale-items" id="saleItems">
+        <div class="sale-item-header">
+          <span>Produit</span><span>Qté</span><span>Prix unit.</span><span>Total</span><span></span>
+        </div>
+        <div id="saleItemsList"></div>
+        <button class="btn-add-item" onclick="Sales.addItem()">+ Ajouter un article</button>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Remise (FCFA)</label>
+          <input type="number" id="sale-discount" value="0" min="0" oninput="Sales.calcTotal()">
+        </div>
+        <div class="form-group">
+          <label>Mode de paiement</label>
+          <select id="sale-payment">
+            <option value="Espèces">Espèces</option>
+            <option value="Mobile Money">Mobile Money</option>
+            <option value="Virement">Virement</option>
+            <option value="Avance">Avance partielle</option>
+          </select>
+        </div>
+      </div>
+      <div class="sale-totals">
+        <div class="total-line"><span>Sous-total:</span><span id="sale-subtotal">0 FCFA</span></div>
+        <div class="total-line"><span>Remise:</span><span id="sale-discount-val">0 FCFA</span></div>
+        <div class="total-line big"><span>Total:</span><span id="sale-total">0 FCFA</span></div>
+        <div class="total-line profit"><span>Bénéfice estimé:</span><span id="sale-profit">0 FCFA</span></div>
+      </div>
+      <div class="form-group">
+        <label>Notes</label>
+        <textarea id="sale-notes" rows="2" placeholder="Notes..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="App.forceCloseModal()">Annuler</button>
+      <button class="btn-primary" onclick="Sales.save()">Enregistrer la vente</button>
+    </div>
+  </div>
+
+  <!-- Client Modal -->
+  <!-- Expense Modal -->
+  <div id="expenseModal" class="modal hidden">
+    <div class="modal-header">
+      <h3>Nouvelle Dépense</h3>
+      <button onclick="App.forceCloseModal()" class="modal-close">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="exp-id">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Date *</label>
+          <input type="date" id="exp-date">
+        </div>
+        <div class="form-group">
+          <label>Catégorie *</label>
+          <select id="exp-category">
+            <option value="Loyer">Loyer</option>
+            <option value="Stock">Approvisionnement stock</option>
+            <option value="Transport">Transport</option>
+            <option value="Personnel">Personnel</option>
+            <option value="Énergie">Énergie / Eau</option>
+            <option value="Marketing">Marketing</option>
+            <option value="Autres">Autres</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Description *</label>
+        <input type="text" id="exp-desc" placeholder="Description de la dépense">
+      </div>
+      <div class="form-group">
+        <label>Montant (FCFA) *</label>
+        <input type="number" id="exp-amount" placeholder="0">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="App.forceCloseModal()">Annuler</button>
+      <button class="btn-primary" onclick="Expenses.save()">Enregistrer</button>
+    </div>
+  </div>
+
+  <!-- Invoice Builder Modal — full screen -->
+  <div id="invoiceModal" class="modal modal-fullscreen hidden">
+    <div class="modal-header inv-modal-header">
+      <div style="display:flex;align-items:center;gap:0.75rem">
+        <span style="font-size:1.4rem">🧾</span>
+        <div>
+          <h3 style="margin:0;font-size:1.1rem">Editeur de Facture</h3>
+          <span style="font-size:0.75rem;color:var(--text2)">Format A5 — Apercu en temps reel</span>
+        </div>
+      </div>
+      <div style="display:flex;gap:0.5rem;align-items:center">
+        <button class="btn-secondary inv-hdr-btn" onclick="Invoices.printDirect()">🖨️ Imprimer</button>
+        <button class="btn-primary inv-hdr-btn" onclick="Invoices.downloadPDF()" style="display:flex;align-items:center;gap:0.4rem">📥 Télécharger PDF</button>
+        <button onclick="App.forceCloseModal()" class="modal-close" style="margin-left:0.5rem">✕</button>
+      </div>
+    </div>
+
+    <div class="invoice-builder-layout">
+
+      <!-- ===== PANNEAU GAUCHE : FORMULAIRE ===== -->
+      <div class="invoice-controls">
+
+        <!-- Vente source -->
+        <div class="inv-section">
+          <div class="inv-section-title">Lier a une vente</div>
+          <select id="inv-sale-ref" onchange="Invoices.fillFromSale(this.value)">
+            <option value="">-- Choisir une vente --</option>
+          </select>
+          <datalist id="clientNames2"></datalist>
+        </div>
+
+        <!-- Boutique -->
+        <div class="inv-section">
+          <div class="inv-section-title">Votre Boutique</div>
+          <div class="inv-field"><label>Nom boutique</label>
+            <input type="text" id="inv-shop-name" oninput="Invoices.preview()"></div>
+          <div class="inv-field"><label>Adresse</label>
+            <input type="text" id="inv-shop-address" oninput="Invoices.preview()"></div>
+          <div class="inv-field"><label>Telephone</label>
+            <input type="text" id="inv-shop-phone" oninput="Invoices.preview()"></div>
+          <div class="inv-field"><label>Email</label>
+            <input type="text" id="inv-shop-email" oninput="Invoices.preview()"></div>
+          <div class="inv-field"><label>Site web</label>
+            <input type="text" id="inv-shop-web" placeholder="www.maboutique.com" oninput="Invoices.preview()"></div>
+          <div class="inv-field"><label>NINEA / RC</label>
+            <input type="text" id="inv-shop-ninea" placeholder="Ex: NINEA 00000" oninput="Invoices.preview()"></div>
+          <div class="inv-field">
+            <label>Logo boutique</label>
+            <div class="logo-upload-area" id="inv-logo-zone" onclick="document.getElementById('inv-logo-file').click()">
+              <img id="inv-logo-preview" src="" alt="" style="display:none;max-height:48px;max-width:120px;border-radius:4px">
+              <span id="inv-logo-placeholder" style="font-size:0.8rem;color:var(--text2)">Cliquer pour ajouter logo</span>
+            </div>
+            <input type="file" id="inv-logo-file" accept="image/*" style="display:none" onchange="Invoices.handleLogo(this)">
+            <button onclick="Invoices.removeLogo()" style="background:none;border:none;color:var(--danger);font-size:0.75rem;cursor:pointer;margin-top:3px">Supprimer le logo</button>
+          </div>
+        </div>
+
+        <!-- Client -->
+        <div class="inv-section">
+          <div class="inv-section-title">Client</div>
+          <div class="inv-field"><label>Nom complet</label>
+            <input type="text" id="inv-client" list="clientNames2" oninput="Invoices.onClientChange()"></div>
+          <div class="inv-field"><label>Adresse</label>
+            <input type="text" id="inv-client-addr" oninput="Invoices.preview()"></div>
+          <div class="inv-field"><label>Telephone</label>
+            <input type="text" id="inv-client-phone" oninput="Invoices.preview()"></div>
+          <div class="inv-field"><label>Email</label>
+            <input type="text" id="inv-client-email" oninput="Invoices.preview()"></div>
+        </div>
+
+        <!-- Details facture -->
+        <div class="inv-section">
+          <div class="inv-section-title">Details Facture</div>
+          <div class="inv-field"><label>Numero</label>
+            <input type="text" id="inv-number" oninput="Invoices.preview()"></div>
+          <div class="inv-field"><label>Date emission</label>
+            <input type="date" id="inv-date" oninput="Invoices.preview()"></div>
+          <div class="inv-field"><label>Date echeance</label>
+            <input type="date" id="inv-due" oninput="Invoices.preview()"></div>
+          <div class="inv-field"><label>Type vente</label>
+            <select id="inv-sale-type" onchange="Invoices.preview()">
+              <option value="">Non specifie</option>
+              <option value="detail">Vente au detail</option>
+              <option value="gros">Vente en gros</option>
+            </select>
+          </div>
+          <div class="inv-field"><label>Mode de paiement</label>
+            <select id="inv-payment" onchange="Invoices.preview()">
+              <option>Especes</option>
+              <option>Mobile Money</option>
+              <option>Virement bancaire</option>
+              <option>Cheque</option>
+              <option>Avance partielle</option>
+            </select>
+          </div>
+          <div class="inv-field"><label>Statut paiement</label>
+            <select id="inv-status" onchange="Invoices.onStatusChange()">
+              <option value="paid">Paye</option>
+              <option value="partial">Partiellement paye</option>
+              <option value="unpaid">Non paye</option>
+            </select>
+          </div>
+          <div class="inv-field" id="inv-partial-block" style="display:none">
+            <label>Montant avance (FCFA)</label>
+            <input type="number" id="inv-advance-paid" value="0" min="0" oninput="Invoices.preview()">
+          </div>
+        </div>
+
+        <!-- Articles -->
+        <div class="inv-section">
+          <div class="inv-section-title">Articles</div>
+          <div class="inv-line-header">
+            <span style="flex:3">Designation</span>
+            <span style="width:44px;text-align:center">Qte</span>
+            <span style="width:90px;text-align:right">Prix</span>
+            <span style="width:20px"></span>
+          </div>
+          <div id="inv-items-list"></div>
+          <button class="btn-add-item" onclick="Invoices.addLine()">+ Ajouter un article</button>
+        </div>
+
+        <!-- Remise & TVA -->
+        <div class="inv-section">
+          <div class="inv-section-title">Remise et Taxes</div>
+          <div class="inv-field"><label>Remise globale (%)</label>
+            <input type="number" id="inv-discount" value="0" min="0" max="100" oninput="Invoices.preview()"></div>
+          <div class="inv-field"><label>TVA (%)</label>
+            <input type="number" id="inv-tax" value="0" min="0" oninput="Invoices.preview()"></div>
+        </div>
+
+        <!-- Options extras -->
+        <div class="inv-section">
+          <div class="inv-section-title">Options</div>
+
+          <div class="inv-field"><label>Message / Notes</label>
+            <textarea id="inv-notes" rows="2" placeholder="Merci pour votre confiance !" oninput="Invoices.preview()"></textarea>
+          </div>
+          <div class="inv-field"><label>Conditions generales</label>
+            <textarea id="inv-terms" rows="2" placeholder="Conditions de vente..." oninput="Invoices.preview()"></textarea>
+          </div>
+
+          <label class="inv-check-label">
+            <input type="checkbox" id="inv-show-warranty" onchange="Invoices._toggleWarranty()">
+            Afficher une garantie
+          </label>
+          <div id="inv-warranty-block" style="display:none;margin-top:0.5rem">
+            <div class="inv-field"><label>Duree</label>
+              <input type="text" id="inv-warranty-duration" placeholder="30 jours" oninput="Invoices.preview()"></div>
+            <div class="inv-field"><label>Conditions</label>
+              <textarea id="inv-warranty-text" rows="2" placeholder="Conditions de garantie..." oninput="Invoices.preview()"></textarea>
+            </div>
+          </div>
+
+          <label class="inv-check-label" style="margin-top:0.5rem">
+            <input type="checkbox" id="inv-show-photo" onchange="Invoices.togglePhotoSection()">
+            Ajouter photos produits
+          </label>
+          <div id="inv-photo-block" style="display:none;margin-top:0.5rem">
+            <div class="logo-upload-area" style="min-height:50px;padding:0.5rem" onclick="document.getElementById('inv-photo-file').click()">
+              <span style="font-size:0.8rem;color:var(--text2)">Cliquer pour ajouter photos (max 2)</span>
+            </div>
+            <input type="file" id="inv-photo-file" accept="image/*" multiple style="display:none" onchange="Invoices.handlePhotos(this)">
+            <div id="inv-photo-previews" style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.5rem"></div>
+          </div>
+
+          <div class="inv-field" style="margin-top:0.75rem"><label>Theme de couleur</label>
+            <div class="inv-color-row">
+              <button class="inv-color-btn" style="background:#c8a4a5" onclick="Invoices.setColor('#c8a4a5','#3a1a1e')" title="Rose Gold"></button>
+              <button class="inv-color-btn" style="background:#26161a" onclick="Invoices.setColor('#26161a','#c8a4a5')" title="Bordeaux sombre"></button>
+              <button class="inv-color-btn" style="background:#0d0d0d" onclick="Invoices.setColor('#0d0d0d','#d4af37')" title="Noir et Or"></button>
+              <button class="inv-color-btn" style="background:#1b3a6b" onclick="Invoices.setColor('#1b3a6b','#7eb8d4')" title="Bleu"></button>
+              <button class="inv-color-btn" style="background:#1e4d2b" onclick="Invoices.setColor('#1e4d2b','#7ec87e')" title="Vert"></button>
+              <button class="inv-color-btn" style="background:#4a0e2a" onclick="Invoices.setColor('#4a0e2a','#e8a0c0')" title="Prune"></button>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- end invoice-controls -->
+
+      <!-- ===== PANNEAU DROIT : APERCU A5 ===== -->
+      <div class="invoice-preview-panel">
+        <div class="preview-label">Apercu — Format A5 (148 x 210 mm)</div>
+        <div class="invoice-a5" id="invoicePreview"></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Stock Movement Modal -->
+  <div id="stockModal" class="modal hidden">
+    <div class="modal-header">
+      <h3>Ajuster le stock</h3>
+      <button onclick="App.forceCloseModal()" class="modal-close">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="stock-prod-id">
+      <p id="stock-prod-name" style="font-weight:600;margin-bottom:1rem"></p>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Type</label>
+          <select id="stock-type">
+            <option value="in">Entrée (réapprovisionnement)</option>
+            <option value="out">Sortie</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Quantité</label>
+          <input type="number" id="stock-qty" min="1" value="1">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Note</label>
+        <input type="text" id="stock-note" placeholder="Motif...">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="App.forceCloseModal()">Annuler</button>
+      <button class="btn-primary" onclick="Products.saveStockMovement()">Enregistrer</button>
+    </div>
+  </div>
+
+
+  <!-- Credit Modal -->
+  <div id="creditModal" class="modal hidden">
+    <div class="modal-header">
+      <h3 id="creditModalTitle">Nouvelle vente à crédit</h3>
+      <button onclick="App.forceCloseModal()" class="modal-close">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="cr-id">
+      <div class="credit-modal-notice">
+        💡 Cette vente sera enregistrée comme <strong>crédit</strong> — elle n'apparaîtra pas dans vos bénéfices tant que le client n'a pas payé.
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Nom du client *</label>
+          <input type="text" id="cr-client" placeholder="Ex: Fatou Diallo">
+        </div>
+        <div class="form-group">
+          <label>Téléphone</label>
+          <input type="text" id="cr-phone" placeholder="+221 77 000 00 00">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Produits vendus à crédit *</label>
+        <div class="sale-items-header">
+          <span>Produit</span><span>Qté</span><span>Prix unit.</span><span>Total</span><span></span>
+        </div>
+        <div id="cr-items-list"></div>
+        <button class="btn-secondary" style="margin-top:0.5rem;font-size:0.82rem" onclick="Credits.addCreditItem()">+ Ajouter un article</button>
+      </div>
+
+      <div class="cr-total-row">
+        <span>Total à payer :</span>
+        <strong id="cr-total-display" style="color:var(--accent);font-size:1.1rem">0 FCFA</strong>
+      </div>
+
+      <div class="form-row" style="margin-top:0.75rem">
+        <div class="form-group">
+          <label>Avance reçue (FCFA) <span style="color:var(--text2);font-weight:400">(optionnel — laisser 0 si rien)</span></label>
+          <input type="number" id="cr-paid" value="0" min="0" oninput="Credits._calcLeft()">
+        </div>
+        <div class="form-group" style="display:flex;align-items:flex-end">
+          <div class="cr-remainder-box" style="flex:1">
+            <span>Reste dû :</span>
+            <strong id="cr-left-val" style="color:var(--danger)">0 FCFA</strong>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Date de la vente</label>
+          <input type="date" id="cr-date">
+        </div>
+        <div class="form-group">
+          <label>Date d'échéance prévue</label>
+          <input type="date" id="cr-due">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Notes</label>
+        <textarea id="cr-notes" rows="2" placeholder="Notes supplémentaires..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="App.forceCloseModal()">Annuler</button>
+      <button class="btn-primary" onclick="Credits.save()">Enregistrer le crédit</button>
+    </div>
+  </div>
+
+  <!-- MODAL CORBEILLE VENTES -->
+  <div id="trashModal" class="modal hidden" style="max-width:780px">
+    <div class="modal-header">
+      <h3>🗑️ Corbeille — Ventes supprimées</h3>
+      <button onclick="App.forceCloseModal()" class="modal-close">✕</button>
+    </div>
+    <div class="modal-body" style="padding:0">
+      <div style="padding:0.75rem 1.25rem;background:color-mix(in srgb,var(--danger) 8%,transparent);border-bottom:1px solid var(--border);font-size:0.82rem;color:var(--text2)">
+        ↩️ Restaurer = remet la vente active + re-déduit le stock &nbsp;|&nbsp; 💀 Supprimer = effacement définitif
+      </div>
+      <div style="overflow-x:auto">
+        <table class="data-table" style="margin:0">
+          <thead><tr>
+            <th>Date vente</th><th>Client</th><th>Articles</th><th>Total</th><th>Supprimée</th><th>Actions</th>
+          </tr></thead>
+          <tbody id="trashTbody"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="App.forceCloseModal()">Fermer</button>
+    </div>
+  </div>
+
+</div><!-- end modalOverlay -->
+
+<!-- TOAST -->
+<div id="toast" class="toast"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
