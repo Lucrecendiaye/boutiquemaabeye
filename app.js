@@ -261,17 +261,26 @@ const Cloud = {
       }
     }
 
-    // Paramètres
-    try {
-      const snap = await this.db
-        .collection('users').doc(uid).collection('meta').doc('settings').get();
-      if (snap.exists) {
-        DB.data.settings = Object.assign({}, DB.defaults.settings, snap.data());
-      } else {
-        await this._writeDoc('meta', 'settings', DB.data.settings || {});
+    // Paramètres — avec retry automatique si hors ligne au démarrage
+    let settingsLoaded = false;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const snap = await this.db
+          .collection('users').doc(uid).collection('meta').doc('settings').get();
+        if (snap.exists) {
+          DB.data.settings = Object.assign({}, DB.defaults.settings, snap.data());
+        } else {
+          await this._writeDoc('meta', 'settings', DB.data.settings || {});
+        }
+        settingsLoaded = true;
+        break;
+      } catch(err) {
+        console.warn('[Cloud] settings tentative ' + (attempt+1) + ' :', err.message);
+        if (attempt < 2) await new Promise(r => setTimeout(r, 1500));
       }
-    } catch(err) {
-      console.warn('[Cloud] settings:', err.message);
+    }
+    if (!settingsLoaded) {
+      console.warn('[Cloud] settings non disponibles — paramètres locaux conservés');
     }
 
     // Mettre à jour le cache local
